@@ -16,7 +16,7 @@ import torch
 from torchvision import transforms
 
 from manydepth import networks
-from .layers import transformation_from_parameters
+from .layers import transformation_from_parameters, disp_to_depth
 
 
 def _parse_args():
@@ -31,6 +31,15 @@ def _parse_args():
                         help='"multi" or "mono". If set to "mono" then the network is run without '
                              'the source image, e.g. as described in Table 5 of the paper.',
                         required=False)
+    # custom for depth prediction
+    parser.add_argument("--min_depth",
+                        type=float,
+                        help="minimum depth",
+                        default=0.1)
+    parser.add_argument("--max_depth",
+                        type=float,
+                        help="maximum depth",
+                        default=100.0)
     return parser
 
 
@@ -161,6 +170,7 @@ def test_simple(args):
         output = depth_decoder(output)
 
         sigmoid_output = output[("disp", 0)]
+        _, pred_depth = disp_to_depth(sigmoid_output, args.min_depth, args.max_depth)
         sigmoid_output_resized = torch.nn.functional.interpolate(
             sigmoid_output, original_size, mode="bilinear", align_corners=False)
         sigmoid_output_resized = sigmoid_output_resized.cpu().numpy()[:, 0]
@@ -190,6 +200,7 @@ def test_simple(args):
             print("-> Saved output image to {}".format(name_dest_im))
 
     print('-> Done!')
+    return pred_depth[0, :, :, :].cpu().detach()  # 1, 1, 192, 640 -> 1, 192, 640
 
 
 if __name__ == '__main__':
